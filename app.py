@@ -5,7 +5,10 @@ from io import BytesIO
 import tempfile
 import os
 from gtts import gTTS
-from pylint import epylint as lint
+from pylint.lint import Run  # Updated import
+from pylint.reporters.text import TextReporter
+from io import StringIO
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -66,26 +69,35 @@ with tabs[2]:
     st.header("AI-Powered Summarization")
     st.warning("Summarization unavailable due to dependency issues. Requires 'transformers' and 'torch'.")
 
-# 4. Code Debugger
+# 4. Code Debugger (Fixed with pylint.lint)
 with tabs[3]:
     st.header("Code Debugger & Explainer")
     code = st.text_area("Your code:", "def example():\n    print(undefined_variable)")
     if st.button("Debug"):
         with st.spinner("Analyzing..."):
             try:
+                # Write code to a temporary file
                 with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
                     tmp.write(code)
                     tmp_path = tmp.name
-                (pylint_stdout, pylint_stderr) = lint.py_run(tmp_path + " --reports=n", return_std=True)
-                output = pylint_stdout.getvalue()
-                if output:
+                
+                # Capture pylint output
+                output = StringIO()
+                reporter = TextReporter(output)
+                Run([tmp_path, "--reports=n"], reporter=reporter, exit=False)
+                lint_output = output.getvalue()
+                output.close()
+                
+                if lint_output.strip():
                     st.text("Issues found:")
-                    st.text(output)
+                    st.text(lint_output)
                 else:
                     st.text("No issues detected by pylint.")
                 os.unlink(tmp_path)
+                
+                # Basic rule-based explanation
                 if "undefined_variable" in code:
-                    st.markdown("**Explanation**: Looks like `undefined_variable` is not defined. Define it with a value (e.g., `undefined_variable = 'something'`) before using it.")
+                    st.markdown("**Explanation**: `undefined_variable` is not defined. Define it (e.g., `undefined_variable = 'something'`) before using it.")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
