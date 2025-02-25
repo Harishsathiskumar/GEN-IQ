@@ -4,31 +4,25 @@ from PIL import Image
 from io import BytesIO
 import tempfile
 import os
-from gtts import gTTS  # Google TTS replacement
-from pylint import epylint as lint  # Static code analysis replacement
-transformers_available = False
-try:
-    from transformers import pipeline
-    transformers_available = True
-except ImportError:
-    st.warning("Transformers not installed. Summarization will be skipped.")
+from gtts import gTTS
+from pylint import epylint as lint
 try:
     import fitz  # PyMuPDF
 except ImportError:
     st.warning("PyMuPDF not installed. ATS Score Checker will be skipped.")
     fitz = None
 
-# API Key (only Hugging Face needed now)
+# API Key (only Hugging Face)
 hf_api_key = st.secrets.get("HF_API_KEY", os.getenv("HF_API_KEY"))
 
 # Title
-st.title("Gen IQ")
+st.title("AI-Powered Web Application")
 
 # Tabs
 tab_names = ["Text-to-Image", "Text-to-Audio", "Summarization", "Code Debugger", "ATS Score Checker"]
 tabs = st.tabs(tab_names)
 
-# 1. Text-to-Image (Unchanged, uses Hugging Face)
+# 1. Text-to-Image
 with tabs[0]:
     st.header("Text-to-Image Generation")
     prompt = st.text_input("Enter a prompt:", "A futuristic city")
@@ -49,11 +43,11 @@ with tabs[0]:
     elif not hf_api_key:
         st.warning("Hugging Face API key missing.")
 
-# 2. Text-to-Audio (Replaced with gTTS)
+# 2. Text-to-Audio
 with tabs[1]:
     st.header("Text-to-Audio Conversion")
     text = st.text_area("Enter text:", "Hello, this is a test.")
-    lang = st.selectbox("Language:", ["en", "es", "fr"], index=0)  # Basic language options
+    lang = st.selectbox("Language:", ["en", "es", "fr"], index=0)
     if st.button("Convert to Audio"):
         with st.spinner("Generating..."):
             try:
@@ -67,34 +61,21 @@ with tabs[1]:
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# 3. Summarization (Unchanged, local transformers)
+# 3. Summarization (Disabled)
 with tabs[2]:
     st.header("AI-Powered Summarization")
-    if transformers_available:
-        text = st.text_area("Text to summarize:", "Paste here...")
-        if st.button("Summarize"):
-            with st.spinner("Summarizing..."):
-                try:
-                    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-                    summary = summarizer(text, max_length=130, min_length=30, do_sample=False)
-                    st.write("Summary:", summary[0]["summary_text"])
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-    else:
-        st.warning("Summarization unavailable due to missing 'transformers' or 'torch' issues.")
+    st.warning("Summarization unavailable due to dependency issues. Requires 'transformers' and 'torch'.")
 
-# 4. Code Debugger (Replaced with pylint)
+# 4. Code Debugger
 with tabs[3]:
     st.header("Code Debugger & Explainer")
     code = st.text_area("Your code:", "def example():\n    print(undefined_variable)")
     if st.button("Debug"):
         with st.spinner("Analyzing..."):
             try:
-                # Write code to a temporary file for pylint
                 with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
                     tmp.write(code)
                     tmp_path = tmp.name
-                # Run pylint
                 (pylint_stdout, pylint_stderr) = lint.py_run(tmp_path + " --reports=n", return_std=True)
                 output = pylint_stdout.getvalue()
                 if output:
@@ -103,13 +84,12 @@ with tabs[3]:
                 else:
                     st.text("No issues detected by pylint.")
                 os.unlink(tmp_path)
-                # Basic explanation (rule-based)
                 if "undefined_variable" in code:
                     st.markdown("**Explanation**: Looks like `undefined_variable` is not defined. Define it with a value (e.g., `undefined_variable = 'something'`) before using it.")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# 5. ATS Score Checker (Unchanged, local pymupdf)
+# 5. ATS Score Checker
 with tabs[4]:
     st.header("ATS Score Checker")
     resume = st.file_uploader("Upload resume (PDF):", type="pdf")
