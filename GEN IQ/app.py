@@ -1,85 +1,134 @@
-from flask import Flask, request, send_file, jsonify, render_template
-import os
-from TTS.api import TTS
-from transformers import pipeline
-import whisper
-import pytesseract
+import streamlit as st
+import requests
 from PIL import Image
-import ast
+from io import BytesIO
+import tempfile
+import os
+from gtts import gTTS  # Google TTS replacement
+from pylint import epylint as lint  # Static code analysis replacement
+transformers_available = False
+try:
+    from transformers import pipeline
+    transformers_available = True
+except ImportError:
+    st.warning("Transformers not installed. Summarization will be skipped.")
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    st.warning("PyMuPDF not installed. ATS Score Checker will be skipped.")
+    fitz = None
 
-app = Flask(__name__)
+# API Key (only Hugging Face needed now)
+hf_api_key = st.secrets.get("HF_API_KEY", os.getenv("HF_API_KEY"))
 
-# Initialize models
-tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False)
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-whisper_model = whisper.load_model("base")
+# Title
+st.title("Gen IQ")
 
-# Ensure uploads folder exists
-UPLOAD_FOLDER = "uploads"
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Tabs
+tab_names = ["Text-to-Image", "Text-to-Audio", "Summarization", "Code Debugger", "ATS Score Checker"]
+tabs = st.tabs(tab_names)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# 1. Text-to-Image (Unchanged, uses Hugging Face)
+with tabs[0]:
+    st.header("Text-to-Image Generation")
+    prompt = st.text_input("Enter a prompt:", "A futuristic city")
+    if st.button("Generate Image") and hf_api_key:
+        url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+        headers = {"Authorization": f"Bearer {hf_api_key}"}
+        payload = {"inputs": prompt}
+        with st.spinner("Generating..."):
+            try:
+                response = requests.post(url, headers=headers, json=payload)
+                if response.status_code == 200:
+                    image = Image.open(BytesIO(response.content))
+                    st.image(image, caption="Generated Image")
+                else:
+                    st.error(f"API error: {response.status_code}")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+    elif not hf_api_key:
+        st.warning("Hugging Face API key missing.")
 
-@app.route('/tts', methods=['POST'])
-def text_to_speech():
-    text = request.form['text']
-    output_file = os.path.join(app.config['UPLOAD_FOLDER'], "output.wav")
-    tts.tts_to_file(text=text, file_path=output_file)
-    return send_file(output_file, as_attachment=True, download_name="output.wav")
+# 2. Text-to-Audio (Replaced with gTTS)
+with tabs[1]:
+    st.header("Text-to-Audio Conversion")
+    text = st.text_area("Enter text:", "Hello, this is a test.")
+    lang = st.selectbox("Language:", ["en", "es", "fr"], index=0)  # Basic language options
+    if st.button("Convert to Audio"):
+        with st.spinner("Generating..."):
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                    tts = gTTS(text=text, lang=lang, slow=False)
+                    tts.save(tmp.name)
+                    st.audio(tmp.name, format="audio/mp3")
+                    with open(tmp.name, "rb") as f:
+                        st.download_button("Download", f.read(), "output.mp3", "audio/mp3")
+                    os.unlink(tmp.name)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
-@app.route('/summarize', methods=['POST'])
-def summarize():
-    text = request.form['text']
-    summary = summarizer(text, max_length=130, min_length=30, do_sample=False)
-    return jsonify({"summary": summary[0]['summary_text']})
+# 3. Summarization (Unchanged, local transformers)
+with tabs[2]:
+    st.header("AI-Powered Summarization")
+    if transformers_available:
+        text = st.text_area("Text to summarize:", "Paste here...")
+        if st.button("Summarize"):
+            with st.spinner("Summarizing..."):
+                try:
+                    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+                    summary = summarizer(text, max_length=130, min_length=30, do_sample=False)
+                    st.write("Summary:", summary[0]["summary_text"])
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    else:
+        st.warning("Summarization unavailable due to missing 'transformers' or 'torch' issues.")
 
-@app.route('/debug', methods=['POST'])
-def debug_code():
-    code = request.form['code']
-    try:
-        ast.parse(code)
-        return jsonify({"status": "No syntax errors", "explanation": "Code is syntactically valid."})
-    except SyntaxError as e:
-        return jsonify({"status": "Error", "explanation": f"Syntax error: {str(e)}"})
+# 4. Code Debugger (Replaced with pylint)
+with tabs[3]:
+    st.header("Code Debugger & Explainer")
+    code = st.text_area("Your code:", "def example():\n    print(undefined_variable)")
+    if st.button("Debug"):
+        with st.spinner("Analyzing..."):
+            try:
+                # Write code to a temporary file for pylint
+                with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
+                    tmp.write(code)
+                    tmp_path = tmp.name
+                # Run pylint
+                (pylint_stdout, pylint_stderr) = lint.py_run(tmp_path + " --reports=n", return_std=True)
+                output = pylint_stdout.getvalue()
+                if output:
+                    st.text("Issues found:")
+                    st.text(output)
+                else:
+                    st.text("No issues detected by pylint.")
+                os.unlink(tmp_path)
+                # Basic explanation (rule-based)
+                if "undefined_variable" in code:
+                    st.markdown("**Explanation**: Looks like `undefined_variable` is not defined. Define it with a value (e.g., `undefined_variable = 'something'`) before using it.")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
-@app.route('/transcribe', methods=['POST'])
-def transcribe():
-    audio_file = request.files['audio']
-    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], "temp.wav")
-    audio_file.save(temp_path)
-    result = whisper_model.transcribe(temp_path)
-    os.remove(temp_path)
-    return jsonify({"transcription": result["text"]})
-
-@app.route('/handwriting', methods=['POST'])
-def recognize_handwriting():
-    image = request.files['image']
-    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], "temp_image.jpg")
-    image.save(temp_path)
-    img = Image.open(temp_path)
-    text = pytesseract.image_to_string(img)
-    os.remove(temp_path)
-    return jsonify({"text": text})
-
-@app.route('/lipsync', methods=['POST'])
-def lipsync():
-    video = request.files['video']
-    audio = request.files['audio']
-    video_path = os.path.join(app.config['UPLOAD_FOLDER'], "input_video.mp4")
-    audio_path = os.path.join(app.config['UPLOAD_FOLDER'], "input_audio.wav")
-    output_path = os.path.join(app.config['UPLOAD_FOLDER'], "output.mp4")
-    
-    video.save(video_path)
-    audio.save(audio_path)
-    
-    os.system(f"python wav2lip.py --checkpoint_path models/wav2lip.pth --face {video_path} --audio {audio_path} --outfile {output_path}")
-    
-    return send_file(output_path, as_attachment=True, download_name="lipsync_output.mp4")
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))  # Render assigns PORT
-    app.run(host="0.0.0.0", port=port, debug=False)
+# 5. ATS Score Checker (Unchanged, local pymupdf)
+with tabs[4]:
+    st.header("ATS Score Checker")
+    resume = st.file_uploader("Upload resume (PDF):", type="pdf")
+    job_desc = st.text_area("Job description:", "Enter here...")
+    if st.button("Check Score") and fitz:
+        if resume and job_desc:
+            with st.spinner("Analyzing..."):
+                try:
+                    pdf = fitz.open(stream=resume.read(), filetype="pdf")
+                    resume_text = "".join(page.get_text() for page in pdf)
+                    resume_words = set(resume_text.lower().split())
+                    job_words = set(job_desc.lower().split())
+                    common = resume_words.intersection(job_words)
+                    score = min(len(common) / len(job_words) * 100, 100)
+                    st.write(f"ATS Score: {score:.2f}%")
+                    st.write("Matches:", ", ".join(common))
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        else:
+            st.error("Upload a resume and enter a job description.")
+    elif not fitz:
+        st.warning("ATS unavailable due to missing 'pymupdf'.")
