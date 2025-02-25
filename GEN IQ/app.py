@@ -16,7 +16,7 @@ except ImportError:
 hf_api_key = st.secrets.get("HF_API_KEY", os.getenv("HF_API_KEY"))
 
 # Title
-st.title("AI-Powered Web Application")
+st.title("GEN IQ")
 
 # Tabs
 tab_names = ["Text-to-Image", "Text-to-Audio", "Summarization", "Code Debugger", "ATS Score Checker"]
