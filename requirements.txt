@@ -3,4 +3,4 @@ requests
 pillow
 pymupdf
 gtts
-pylint
+pylint  # Latest version, no need to pin unless issues persist
