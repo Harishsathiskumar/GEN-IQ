@@ -244,27 +244,6 @@
                         <button onclick="navigate('ats-score-checker')">ATS Score Checker</button>
                     </div>
                 </div>
-                <div class="tool-card">
-                    <h3>✍️ Poem Generator</h3>
-                    <p>Create poems from a theme in various styles.</p>
-                    <div class="button-container">
-                        <button onclick="navigate('poem-generator')">Poem Generator</button>
-                    </div>
-                </div>
-                <div class="tool-card">
-                    <h3>📚 Story Idea Generator</h3>
-                    <p>Generate creative story premises for writing.</p>
-                    <div class="button-container">
-                        <button onclick="navigate('story-idea-generator')">Story Idea Generator</button>
-                    </div>
-                </div>
-                <div class="tool-card">
-                    <h3>😂 Meme Generator</h3>
-                    <p>Create memes with AI-generated images and text.</p>
-                    <div class="button-container">
-                        <button onclick="navigate('meme-generator')">Meme Generator</button>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -291,7 +270,7 @@
                 <option value="es">Spanish</option>
                 <option value="fr">French</option>
             </select>
-            <button onclick="generateAudio()">Generate Audio</button>
+            <button onclick="convertToAudio()">Convert to Audio</button>
             <div id="tta-result"></div>
         </div>
 
@@ -325,54 +304,10 @@
                 <button onclick="navigate('home')">Back to Tools</button>
             </div>
             <h2>ATS Score Checker</h2>
-            <label>Paste Your Resume:</label>
             <textarea id="ats-resume" placeholder="Paste your resume text here..." rows="10"></textarea>
-            <label>Job Description:</label>
             <textarea id="ats-job-desc" placeholder="Enter job description here..." rows="10"></textarea>
             <button onclick="checkATSScore()">Check Score</button>
             <div id="ats-result"></div>
-        </div>
-
-        <!-- Poem Generator Section -->
-        <div id="poem-generator" class="tool-section">
-            <div class="back-button-container">
-                <button onclick="navigate('home')">Back to Tools</button>
-            </div>
-            <h2>Poem Generator</h2>
-            <input type="text" id="poem-theme" placeholder="Enter a theme: e.g., Nature" value="Nature">
-            <select id="poem-type">
-                <option value="haiku">Haiku</option>
-                <option value="sonnet">Sonnet</option>
-                <option value="free">Free Verse</option>
-            </select>
-            <button onclick="generatePoem()">Generate Poem</button>
-            <div id="poem-result"></div>
-        </div>
-
-        <!-- Story Idea Generator Section -->
-        <div id="story-idea-generator" class="tool-section">
-            <div class="back-button-container">
-                <button onclick="navigate('home')">Back to Tools</button>
-            </div>
-            <h2>Story Idea Generator</h2>
-            <input type="text" id="story-genre" placeholder="Genre: e.g., Fantasy" value="Fantasy">
-            <input type="text" id="story-setting" placeholder="Setting: e.g., Enchanted Forest" value="Enchanted Forest">
-            <input type="text" id="story-character" placeholder="Character: e.g., Brave Knight" value="Brave Knight">
-            <button onclick="generateStoryIdea()">Generate Story Idea</button>
-            <div id="story-idea-result"></div>
-        </div>
-
-        <!-- Meme Generator Section -->
-        <div id="meme-generator" class="tool-section">
-            <div class="back-button-container">
-                <button onclick="navigate('home')">Back to Tools</button>
-            </div>
-            <h2>Meme Generator</h2>
-            <input type="text" id="meme-top-text" placeholder="Top Text: e.g., When You Realize" value="When You Realize">
-            <input type="text" id="meme-bottom-text" placeholder="Bottom Text: e.g., It's Friday" value="It's Friday">
-            <input type="text" id="meme-image-prompt" placeholder="Image Prompt: e.g., Happy Cat" value="Happy Cat">
-            <button onclick="generateMeme()">Generate Meme</button>
-            <div id="meme-result"></div>
         </div>
     </div>
 
@@ -399,10 +334,6 @@
         async function generateImage() {
             const prompt = document.getElementById('tti-prompt').value;
             const resultDiv = document.getElementById('tti-result');
-            if (!prompt || !prompt.trim()) {
-                resultDiv.innerHTML = '<p class="error">Please enter a valid prompt.</p>';
-                return;
-            }
             resultDiv.innerHTML = '<p>Generating...</p>';
             try {
                 const response = await fetch('/generate-image', {
@@ -412,201 +343,28 @@
                 });
                 const data = await response.json();
                 if (data.image) {
-                    resultDiv.innerHTML = `
-                        <img src="${data.image}" alt="Generated Image" style="max-width: 100%;">
-                        <button onclick="downloadImage('${data.image}')">Download Image</button>
-                    `;
+                    resultDiv.innerHTML = `<img src="${data.image}" alt="Generated Image" style="max-width: 100%;">`;
                 } else {
-                    resultDiv.innerHTML = `<p class="error">Failed to generate image: ${data.error}</p>`;
+                    resultDiv.innerHTML = `<p class="error">${data.error}</p>`;
                 }
             } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
+                resultDiv.innerHTML = `<p class="error">Error: ${e.message}</p>`;
             }
         }
 
-        async function downloadImage(imageData) {
-            try {
-                const formData = new FormData();
-                formData.append('image_data', imageData);
-                const response = await fetch('/download-image', {
-                    method: 'POST',
-                    body: formData
-                });
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'generated_image.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } catch (e) {
-                alert('Failed to download image: ' + e.message);
-            }
-        }
-
-        // Text-to-Audio
-        async function generateAudio() {
+        // Text-to-Audio using Web Speech API
+        function convertToAudio() {
             const text = document.getElementById('tta-text').value;
             const lang = document.getElementById('tta-lang').value;
             const resultDiv = document.getElementById('tta-result');
-            if (!text || !text.trim()) {
+            if (!text) {
                 resultDiv.innerHTML = '<p class="error">Please enter some text.</p>';
                 return;
             }
-            resultDiv.innerHTML = '<p>Generating...</p>';
-            try {
-                const response = await fetch('/generate-audio', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ 'text': text, 'lang': lang })
-                });
-                const data = await response.json();
-                if (data.audio) {
-                    resultDiv.innerHTML = `
-                        <audio controls>
-                            <source src="${data.audio}" type="audio/wav">
-                            Your browser does not support the audio element.
-                        </audio>
-                        <button onclick="downloadAudio('${data.audio}')">Download Audio</button>
-                    `;
-                } else {
-                    resultDiv.innerHTML = `<p class="error">Failed to generate audio: ${data.error}</p>`;
-                }
-            } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
-            }
-        }
-
-        async function downloadAudio(audioData) {
-            try {
-                const formData = new FormData();
-                formData.append('audio_data', audioData);
-                const response = await fetch('/download-audio', {
-                    method: 'POST',
-                    body: formData
-                });
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'generated_audio.wav';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } catch (e) {
-                alert('Failed to download audio: ' + e.message);
-            }
-        }
-
-        // Poem Generator
-        async function generatePoem() {
-            const theme = document.getElementById('poem-theme').value;
-            const poemType = document.getElementById('poem-type').value;
-            const resultDiv = document.getElementById('poem-result');
-            if (!theme || !theme.trim()) {
-                resultDiv.innerHTML = '<p class="error">Please enter a valid theme.</p>';
-                return;
-            }
-            resultDiv.innerHTML = '<p>Generating...</p>';
-            try {
-                const response = await fetch('/generate-poem', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ 'theme': theme, 'poem_type': poemType })
-                });
-                const data = await response.json();
-                if (data.poem) {
-                    resultDiv.innerHTML = `<pre style="text-align: center;">${data.poem}</pre>`;
-                } else {
-                    resultDiv.innerHTML = `<p class="error">Failed to generate poem: ${data.error}</p>`;
-                }
-            } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
-            }
-        }
-
-        // Story Idea Generator
-        async function generateStoryIdea() {
-            const genre = document.getElementById('story-genre').value;
-            const setting = document.getElementById('story-setting').value;
-            const character = document.getElementById('story-character').value;
-            const resultDiv = document.getElementById('story-idea-result');
-            if (!genre || !setting || !character) {
-                resultDiv.innerHTML = '<p class="error">Please provide genre, setting, and character.</p>';
-                return;
-            }
-            resultDiv.innerHTML = '<p>Generating...</p>';
-            try {
-                const response = await fetch('/generate-story-idea', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ 'genre': genre, 'setting': setting, 'character': character })
-                });
-                const data = await response.json();
-                if (data.story_idea) {
-                    resultDiv.innerHTML = `<p>${data.story_idea}</p>`;
-                } else {
-                    resultDiv.innerHTML = `<p class="error">Failed to generate story idea: ${data.error}</p>`;
-                }
-            } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
-            }
-        }
-
-        // Meme Generator
-        async function generateMeme() {
-            const topText = document.getElementById('meme-top-text').value;
-            const bottomText = document.getElementById('meme-bottom-text').value;
-            const imagePrompt = document.getElementById('meme-image-prompt').value;
-            const resultDiv = document.getElementById('meme-result');
-            if (!topText || !bottomText || !imagePrompt) {
-                resultDiv.innerHTML = '<p class="error">Please provide top text, bottom text, and image prompt.</p>';
-                return;
-            }
-            resultDiv.innerHTML = '<p>Generating...</p>';
-            try {
-                const response = await fetch('/generate-meme', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ 'top_text': topText, 'bottom_text': bottomText, 'image_prompt': imagePrompt })
-                });
-                const data = await response.json();
-                if (data.meme) {
-                    resultDiv.innerHTML = `
-                        <img src="${data.meme}" alt="Generated Meme" style="max-width: 100%;">
-                        <button onclick="downloadMeme('${data.meme}')">Download Meme</button>
-                    `;
-                } else {
-                    resultDiv.innerHTML = `<p class="error">Failed to generate meme: ${data.error}</p>`;
-                }
-            } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
-            }
-        }
-
-        async function downloadMeme(memeData) {
-            try {
-                const formData = new FormData();
-                formData.append('meme_data', memeData);
-                const response = await fetch('/download-meme', {
-                    method: 'POST',
-                    body: formData
-                });
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'generated_meme.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } catch (e) {
-                alert('Failed to download meme: ' + e.message);
-            }
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            window.speechSynthesis.speak(utterance);
+            resultDiv.innerHTML = '<p class="success">Playing audio...</p>';
         }
 
         // Summarization
@@ -663,11 +421,6 @@
             const jobDesc = document.getElementById('ats-job-desc').value;
             const resultDiv = document.getElementById('ats-result');
 
-            if (!resume || !jobDesc) {
-                resultDiv.innerHTML = '<p class="error">Please provide both a resume and job description.</p>';
-                return;
-            }
-
             try {
                 const response = await fetch('/check-ats-score', {
                     method: 'POST',
@@ -681,33 +434,10 @@
                     resultDiv.innerHTML = `
                         <p>ATS Score: ${data.score}%</p>
                         <p>Matches: ${data.matches.join(', ')}</p>
-                        <button onclick="downloadATSResult('${encodeURIComponent(data.result_text)}')">Download Result</button>
                     `;
                 }
             } catch (e) {
                 resultDiv.innerHTML = `<p class="error">Error: ${e.message}</p>`;
-            }
-        }
-
-        async function downloadATSResult(resultText) {
-            try {
-                const formData = new FormData();
-                formData.append('result_text', decodeURIComponent(resultText));
-                const response = await fetch('/download-ats-result', {
-                    method: 'POST',
-                    body: formData
-                });
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'ats_score_result.txt';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } catch (e) {
-                alert('Failed to download result: ' + e.message);
             }
         }
     </script>
