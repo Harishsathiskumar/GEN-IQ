@@ -318,7 +318,7 @@
             <h2>Text-to-Image Generation</h2>
             <input type="text" id="tti-prompt" placeholder="Enter a prompt: A futuristic city" value="A futuristic city">
             <button onclick="generateImage()">Generate Image</button>
-            <div id="tts-result"></div>
+            <div id="tti-result"></div>
         </div>
 
         <!-- Text-to-Audio Section -->
@@ -446,6 +446,10 @@
         async function generateImage() {
             const prompt = document.getElementById('tti-prompt').value;
             const resultDiv = document.getElementById('tti-result');
+            if (!prompt || !prompt.trim()) {
+                resultDiv.innerHTML = '<p class="error">Please enter a valid prompt.</p>';
+                return;
+            }
             resultDiv.innerHTML = '<p>Generating...</p>';
             try {
                 const response = await fetch('/generate-image', {
@@ -457,10 +461,10 @@
                 if (data.image) {
                     resultDiv.innerHTML = `<img src="${data.image}" alt="Generated Image" style="max-width: 100%;">`;
                 } else {
-                    resultDiv.innerHTML = `<p class="error">${data.error}</p>`;
+                    resultDiv.innerHTML = `<p class="error">Failed to generate image: ${data.error}</p>`;
                 }
             } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Error: ${e.message}</p>`;
+                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
             }
         }
 
