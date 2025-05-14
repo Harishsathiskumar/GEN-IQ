@@ -3,4 +3,3 @@ requests
 nltk 
 pylint
 gunicorn
-Pillow
