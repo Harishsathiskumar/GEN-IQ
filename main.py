@@ -9,7 +9,6 @@ from pylint.reporters.text import TextReporter
 from io import StringIO
 import os
 import base64
-import time
 
 app = Flask(__name__)
 
@@ -31,39 +30,21 @@ def index():
 @app.route('/generate-image', methods=['POST'])
 def generate_image():
     prompt = request.form.get('prompt')
-    if not prompt or not prompt.strip():
-        return jsonify({'error': 'Prompt is empty or invalid.'}), 400
     if not HF_API_KEY:
         return jsonify({'error': 'Hugging Face API key missing.'}), 400
-
-    url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    payload = {"inputs": prompt}
-
-    # Retry logic for 503 errors (model loading)
-    max_retries = 3
-    retry_delay = 5  # seconds
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            if response.status_code == 200:
-                image_bytes = response.content
-                image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-                return jsonify({'image': f'data:image/png;base64,{image_base64}'})
-            elif response.status_code == 503:
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    continue
-                return jsonify({'error': 'Model is currently loading or unavailable. Please try again later.'}), 503
-            else:
-                try:
-                    error_detail = response.json().get('error', 'Unknown error')
-                except ValueError:
-                    error_detail = response.text or 'Unknown error'
-                return jsonify({'error': f'API error: {response.status_code} - {error_detail}'}), 500
-        except requests.exceptions.RequestException as e:
-            return jsonify({'error': f'Network error: {str(e)}'}), 500
-    return jsonify({'error': 'Failed to generate image after multiple attempts.'}), 500
+    try:
+        url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+        payload = {"inputs": prompt}
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            image_bytes = response.content
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            return jsonify({'image': f'data:image/png;base64,{image_base64}'})
+        else:
+            return jsonify({'error': f'API error: {response.status_code}'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/summarize', methods=['POST'])
 def summarize():
@@ -123,20 +104,11 @@ def debug_code():
 
 @app.route('/check-ats-score', methods=['POST'])
 def check_ats_score():
-    if 'resume' not in request.files:
-        return jsonify({'error': 'Please upload a resume file.'}), 400
-    
-    resume_file = request.files['resume']
+    resume = request.form.get('resume')
     job_desc = request.form.get('job_desc')
     
-    if not resume_file or not job_desc:
-        return jsonify({'error': 'Please provide both a resume file and job description.'}), 400
-    
-    # Read the resume file content
-    try:
-        resume = resume_file.read().decode('utf-8')
-    except Exception as e:
-        return jsonify({'error': f'Error reading resume file: {str(e)}'}), 400
+    if not resume or not job_desc:
+        return jsonify({'error': 'Please provide both resume text and job description.'}), 400
     
     resume_words = set(resume.lower().split())
     job_words = set(job_desc.lower().split())
