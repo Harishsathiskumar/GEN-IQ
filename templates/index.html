@@ -178,69 +178,6 @@
         .success {
             color: #00ff00;
         }
-        /* Unique Drag-and-Drop Styles for ATS Score Checker */
-        .drag-drop-area {
-            width: 90%;
-            max-width: 400px;
-            margin: 10px auto;
-            padding: 20px;
-            border: 2px dashed #FFD700;
-            border-radius: 15px;
-            background: rgba(20, 20, 30, 0.95);
-            text-align: center;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        .drag-drop-area.drag-over {
-            border-color: #2ECC71;
-            background: rgba(46, 204, 113, 0.1);
-            box-shadow: 0 0 20px rgba(46, 204, 113, 0.7);
-            transform: scale(1.02);
-        }
-        .drag-drop-area .icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            animation: pulse 2s infinite ease-in-out;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.7; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.7; }
-        }
-        .drag-drop-area p {
-            margin: 0;
-            font-size: 1rem;
-            color: #D3D3D3;
-        }
-        .drag-drop-area .browse-button {
-            background: linear-gradient(45deg, #FFD700, #C0C0C0);
-            color: #1F2525;
-            border-radius: 8px;
-            padding: 8px 16px;
-            margin-top: 10px;
-            display: inline-block;
-            cursor: pointer;
-            transition: transform 0.3s;
-        }
-        .drag-drop-area .browse-button:hover {
-            transform: scale(1.05);
-        }
-        .drag-drop-area input[type="file"] {
-            display: none;
-        }
-        .file-name {
-            margin-top: 10px;
-            font-size: 0.9rem;
-            color: #2ECC71;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.3s ease;
-        }
-        .file-name.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
         @media (max-width: 600px) {
             .unique-title {
                 font-size: 4.5rem;
@@ -361,22 +298,13 @@
             <div id="code-result"></div>
         </div>
 
-        <!-- ATS Score Checker Section with Unique Drag-and-Drop -->
+        <!-- ATS Score Checker Section -->
         <div id="ats-score-checker" class="tool-section">
             <div class="back-button-container">
                 <button onclick="navigate('home')">Back to Tools</button>
             </div>
             <h2>ATS Score Checker</h2>
-            <label>Upload Resume (.txt file):</label>
-            <div class="drag-drop-area" id="drag-drop-area">
-                <div class="icon">📄</div>
-                <p>Drag & Drop Your Resume Here</p>
-                <p>or</p>
-                <label class="browse-button">Browse Files</label>
-                <input type="file" id="ats-resume" accept=".txt">
-                <div class="file-name" id="file-name"></div>
-            </div>
-            <label>Job Description:</label>
+            <textarea id="ats-resume" placeholder="Paste your resume text here..." rows="10"></textarea>
             <textarea id="ats-job-desc" placeholder="Enter job description here..." rows="10"></textarea>
             <button onclick="checkATSScore()">Check Score</button>
             <div id="ats-result"></div>
@@ -402,54 +330,10 @@
             });
         });
 
-        // Drag-and-Drop Functionality for ATS Score Checker
-        const dragDropArea = document.getElementById('drag-drop-area');
-        const fileInput = document.getElementById('ats-resume');
-        const fileNameDisplay = document.getElementById('file-name');
-
-        dragDropArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dragDropArea.classList.add('drag-over');
-        });
-
-        dragDropArea.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            dragDropArea.classList.remove('drag-over');
-        });
-
-        dragDropArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dragDropArea.classList.remove('drag-over');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                fileInput.files = files;
-                fileNameDisplay.textContent = `Uploaded: ${files[0].name}`;
-                fileNameDisplay.classList.add('visible');
-            }
-        });
-
-        // Trigger file input click when "Browse Files" is clicked
-        const browseButton = dragDropArea.querySelector('.browse-button');
-        browseButton.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // Update file name display when a file is selected via browse
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                fileNameDisplay.textContent = `Uploaded: ${fileInput.files[0].name}`;
-                fileNameDisplay.classList.add('visible');
-            }
-        });
-
         // Text-to-Image
         async function generateImage() {
             const prompt = document.getElementById('tti-prompt').value;
             const resultDiv = document.getElementById('tti-result');
-            if (!prompt || !prompt.trim()) {
-                resultDiv.innerHTML = '<p class="error">Please enter a valid prompt.</p>';
-                return;
-            }
             resultDiv.innerHTML = '<p>Generating...</p>';
             try {
                 const response = await fetch('/generate-image', {
@@ -461,10 +345,10 @@
                 if (data.image) {
                     resultDiv.innerHTML = `<img src="${data.image}" alt="Generated Image" style="max-width: 100%;">`;
                 } else {
-                    resultDiv.innerHTML = `<p class="error">Failed to generate image: ${data.error}</p>`;
+                    resultDiv.innerHTML = `<p class="error">${data.error}</p>`;
                 }
             } catch (e) {
-                resultDiv.innerHTML = `<p class="error">Network error: ${e.message}</p>`;
+                resultDiv.innerHTML = `<p class="error">Error: ${e.message}</p>`;
             }
         }
 
@@ -531,25 +415,17 @@
             }
         }
 
-        // ATS Score Checker with File Upload
+        // ATS Score Checker
         async function checkATSScore() {
-            const resumeInput = document.getElementById('ats-resume');
+            const resume = document.getElementById('ats-resume').value;
             const jobDesc = document.getElementById('ats-job-desc').value;
             const resultDiv = document.getElementById('ats-result');
-
-            if (!resumeInput.files.length || !jobDesc) {
-                resultDiv.innerHTML = '<p class="error">Please upload a resume file and provide a job description.</p>';
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('resume', resumeInput.files[0]);
-            formData.append('job_desc', jobDesc);
 
             try {
                 const response = await fetch('/check-ats-score', {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ 'resume': resume, 'job_desc': jobDesc })
                 });
                 const data = await response.json();
                 if (data.error) {
