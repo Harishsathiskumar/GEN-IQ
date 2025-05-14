@@ -1,6 +1,1 @@
-streamlit
-requests
-pillow
-pymupdf
-gtts
-pylint  # Latest version, no need to pin unless issues persist
+Flask==2.3.2 requests nltk pylint gunicorn
