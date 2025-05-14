@@ -1,126 +1,131 @@
-import streamlit as st
+from flask import Flask, render_template, request, jsonify
 import requests
-from PIL import Image
-from io import BytesIO
-import tempfile
-import os
-from gtts import gTTS
-from pylint.lint import Run  # Updated import
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.corpus import stopwords
+from collections import Counter
+from pylint.lint import Run
 from pylint.reporters.text import TextReporter
 from io import StringIO
+import os
+import base64
 
+app = Flask(__name__)
+
+# Ensure NLTK data is available
 try:
-    import fitz  # PyMuPDF
-except ImportError:
-    st.warning("PyMuPDF not installed. ATS Score Checker will be skipped.")
-    fitz = None
+    nltk.data.find('tokenizers/punkt_tab')
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('punkt_tab')
+    nltk.download('stopwords')
 
-# API Key (only Hugging Face)
-hf_api_key = st.secrets.get("HF_API_KEY", os.getenv("HF_API_KEY"))
+# Hugging Face API Key (Set in Render environment variables)
+HF_API_KEY = os.getenv("HF_API_KEY")
 
-# Title
-st.title("GEN IQ")
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-# Tabs
-tab_names = ["Text-to-Image", "Text-to-Audio", "Summarization", "Code Debugger", "ATS Score Checker"]
-tabs = st.tabs(tab_names)
-
-# 1. Text-to-Image
-with tabs[0]:
-    st.header("Text-to-Image Generation")
-    prompt = st.text_input("Enter a prompt:", "A futuristic city")
-    if st.button("Generate Image") and hf_api_key:
+@app.route('/generate-image', methods=['POST'])
+def generate_image():
+    prompt = request.form.get('prompt')
+    if not HF_API_KEY:
+        return jsonify({'error': 'Hugging Face API key missing.'}), 400
+    try:
         url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-        headers = {"Authorization": f"Bearer {hf_api_key}"}
+        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
         payload = {"inputs": prompt}
-        with st.spinner("Generating..."):
-            try:
-                response = requests.post(url, headers=headers, json=payload)
-                if response.status_code == 200:
-                    image = Image.open(BytesIO(response.content))
-                    st.image(image, caption="Generated Image")
-                else:
-                    st.error(f"API error: {response.status_code}")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-    elif not hf_api_key:
-        st.warning("Hugging Face API key missing.")
-
-# 2. Text-to-Audio
-with tabs[1]:
-    st.header("Text-to-Audio Conversion")
-    text = st.text_area("Enter text:", "Hello, this is a test.")
-    lang = st.selectbox("Language:", ["en", "es", "fr"], index=0)
-    if st.button("Convert to Audio"):
-        with st.spinner("Generating..."):
-            try:
-                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-                    tts = gTTS(text=text, lang=lang, slow=False)
-                    tts.save(tmp.name)
-                    st.audio(tmp.name, format="audio/mp3")
-                    with open(tmp.name, "rb") as f:
-                        st.download_button("Download", f.read(), "output.mp3", "audio/mp3")
-                    os.unlink(tmp.name)
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-
-# 3. Summarization (Disabled)
-with tabs[2]:
-    st.header("AI-Powered Summarization")
-    st.warning("Summarization unavailable due to dependency issues. Requires 'transformers' and 'torch'.")
-
-# 4. Code Debugger (Fixed with pylint.lint)
-with tabs[3]:
-    st.header("Code Debugger & Explainer")
-    code = st.text_area("Your code:", "def example():\n    print(undefined_variable)")
-    if st.button("Debug"):
-        with st.spinner("Analyzing..."):
-            try:
-                # Write code to a temporary file
-                with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
-                    tmp.write(code)
-                    tmp_path = tmp.name
-                
-                # Capture pylint output
-                output = StringIO()
-                reporter = TextReporter(output)
-                Run([tmp_path, "--reports=n"], reporter=reporter, exit=False)
-                lint_output = output.getvalue()
-                output.close()
-                
-                if lint_output.strip():
-                    st.text("Issues found:")
-                    st.text(lint_output)
-                else:
-                    st.text("No issues detected by pylint.")
-                os.unlink(tmp_path)
-                
-                # Basic rule-based explanation
-                if "undefined_variable" in code:
-                    st.markdown("**Explanation**: `undefined_variable` is not defined. Define it (e.g., `undefined_variable = 'something'`) before using it.")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-
-# 5. ATS Score Checker
-with tabs[4]:
-    st.header("ATS Score Checker")
-    resume = st.file_uploader("Upload resume (PDF):", type="pdf")
-    job_desc = st.text_area("Job description:", "Enter here...")
-    if st.button("Check Score") and fitz:
-        if resume and job_desc:
-            with st.spinner("Analyzing..."):
-                try:
-                    pdf = fitz.open(stream=resume.read(), filetype="pdf")
-                    resume_text = "".join(page.get_text() for page in pdf)
-                    resume_words = set(resume_text.lower().split())
-                    job_words = set(job_desc.lower().split())
-                    common = resume_words.intersection(job_words)
-                    score = min(len(common) / len(job_words) * 100, 100)
-                    st.write(f"ATS Score: {score:.2f}%")
-                    st.write("Matches:", ", ".join(common))
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            image_bytes = response.content
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            return jsonify({'image': f'data:image/png;base64,{image_base64}'})
         else:
-            st.error("Upload a resume and enter a job description.")
-    elif not fitz:
-        st.warning("ATS unavailable due to missing 'pymupdf'.")
+            return jsonify({'error': f'API error: {response.status_code}'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/summarize', methods=['POST'])
+def summarize():
+    text = request.form.get('text')
+    num_sentences = int(request.form.get('num_sentences', 2))
+    
+    sentences = sent_tokenize(text)
+    words = text.split()
+    stats = {'sentence_count': len(sentences), 'word_count': len(words)}
+    
+    if len(sentences) < 2:
+        return jsonify({'error': 'Please enter at least two sentences to summarize.', 'stats': stats}), 400
+    if not text.strip():
+        return jsonify({'error': 'Please enter some text to summarize.', 'stats': stats}), 400
+    
+    stop_words = set(stopwords.words("english"))
+    words = [w.lower() for w in word_tokenize(text) if w.isalnum() and w.lower() not in stop_words]
+    word_freq = Counter(words)
+    sentence_scores = {}
+    for i, sent in enumerate(sentences):
+        score = sum(word_freq[w.lower()] for w in word_tokenize(sent) if w.isalnum() and w.lower() in word_freq)
+        sentence_scores[i] = score / (len(word_tokenize(sent)) + 1)
+    top_sentences = sorted(sorted(sentence_scores.items(), key=lambda x: x[0])[:num_sentences], key=lambda x: x[1], reverse=True)
+    summary = [sentences[i] for i, _ in top_sentences]
+    
+    return jsonify({'summary': summary, 'stats': stats})
+
+@app.route('/debug-code', methods=['POST'])
+def debug_code():
+    code = request.form.get('code')
+    issues = []
+    
+    if not code.strip():
+        issues.append('Code is empty.')
+    if any(len(line) > 120 for line in code.split('\n')):
+        issues.append('Some lines exceed 120 characters. Consider breaking them up.')
+    
+    try:
+        with open('temp.py', 'w') as f:
+            f.write(code)
+        output = StringIO()
+        reporter = TextReporter(output)
+        Run(['temp.py', '--reports=n'], reporter=reporter, exit=False)
+        lint_output = output.getvalue()
+        output.close()
+        os.remove('temp.py')
+        if lint_output.strip():
+            issues.extend(lint_output.strip().split('\n'))
+        if 'undefined_variable' in code:
+            issues.append('Undefined variable: "undefined_variable" is not defined. Define it (e.g., `undefined_variable = \'something\'`) before using it.')
+    except Exception as e:
+        issues.append(f'Error during linting: {str(e)}')
+    
+    if not issues:
+        return jsonify({'message': 'No issues detected.'})
+    return jsonify({'issues': issues})
+
+@app.route('/check-ats-score', methods=['POST'])
+def check_ats_score():
+    if 'resume' not in request.files:
+        return jsonify({'error': 'Please upload a resume file.'}), 400
+    
+    resume_file = request.files['resume']
+    job_desc = request.form.get('job_desc')
+    
+    if not resume_file or not job_desc:
+        return jsonify({'error': 'Please provide both a resume file and job description.'}), 400
+    
+    # Read the resume file content
+    try:
+        resume = resume_file.read().decode('utf-8')
+    except Exception as e:
+        return jsonify({'error': f'Error reading resume file: {str(e)}'}), 400
+    
+    resume_words = set(resume.lower().split())
+    job_words = set(job_desc.lower().split())
+    common = resume_words.intersection(job_words)
+    score = min(len(common) / len(job_words) * 100, 100)
+    
+    return jsonify({'score': round(score, 2), 'matches': list(common)})
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
